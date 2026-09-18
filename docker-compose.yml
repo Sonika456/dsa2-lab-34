@@ -1,0 +1,66 @@
+services:
+  # 1: db
+  db:
+    image: postgres:16  # Пункт 1: используем готовый образ
+    
+    # Пункт 2: задаём переменные окружения для инициализации БД
+    environment:
+      POSTGRES_USER: CHandZH
+      POSTGRES_PASSWORD: cat123
+      POSTGRES_DB: CHandZH_db
+    
+    # Пункт 6: healthcheck проверяет реальную готовность БД принимать подключения
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U CHandZH -d CHandZH_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    # Пункт 8: для сохранения данных при пересоздании контейнера
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    
+    # Пункт 4: подключаем к общей сети
+    networks:
+      - app-network
+
+  # 2: app
+  app:
+    # Пункт 1: собираем образ
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    # Пункт 3: подключаем файл .env
+    env_file:
+      - .env
+    
+    # Пункт 3: переопределяем переменные, чтобы хост указывал на имя сервиса db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: CHandZH
+      DB_PASSWORD: cat123
+      DB_NAME: CHandZH_db
+    
+    # Пункт 5: публикуем наружу порт приложения
+    ports:
+      - "5000:5000"
+    
+    # Пункт 7: ждём, пока БД не пройдёт healthcheck (станет service_healthy)
+    depends_on:
+      db:
+        condition: service_healthy
+    
+    # Пункт 4: подключаем к общей сети
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+# Пункт 8
+volumes:
+  pg-data:
