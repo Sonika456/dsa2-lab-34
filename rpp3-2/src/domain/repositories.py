@@ -1,0 +1,29 @@
+"""
+Порты репозиториев (Protocol).
+Доменный слой работает только с этими контрактами.
+Конкретные In-Memory реализации находятся в infrastructure/.
+"""
+from typing import Protocol, Optional
+from uuid import UUID
+
+from domain.user import User
+from domain.scooter import Scooter
+from domain.trip import Trip
+
+
+class UserRepository(Protocol):
+    def get(self, user_id: UUID) -> Optional[User]: ...
+    def save(self, user: User) -> None: ...
+    def all(self) -> list[User]: ...
+
+
+class ScooterRepository(Protocol):
+    def get(self, scooter_id: UUID) -> Optional[Scooter]: ...
+    def save(self, scooter: Scooter) -> None: ...
+    def all(self) -> list[Scooter]: ...
+
+
+class TripRepository(Protocol):
+    def get(self, trip_id: UUID) -> Optional[Trip]: ...
+    def save(self, trip: Trip) -> None: ...
+    def all(self) -> list[Trip]: ...
