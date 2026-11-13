@@ -19,7 +19,7 @@ from flightgen import AIRPORTS  # noqa: E402
 
 
 def percentile(values: list[float], p: float) -> float:
-    """Метод ближайшег00000000о ранга: значение с номером ceil(p/100 * n) в отсортированном списке."""
+    """Метод ближайшего ранга: значение с номером ceil(p/100 * n) в отсортированном списке."""
     if not values:
         return float("nan")
     s = sorted(values)
