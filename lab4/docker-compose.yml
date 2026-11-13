@@ -1,0 +1,98 @@
+x-supplier: &supplier
+  build:
+    context: .
+    dockerfile: supplier/Dockerfile
+  healthcheck:
+    test: ["CMD", "python", "-c",
+           "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+    interval: 2s
+    retries: 30
+
+x-search-env: &search-env
+  SUPPLIERS: supplier1=http://supplier1:8000,supplier2=http://supplier2:8000,supplier3=http://supplier3:8000
+
+x-search-common: &search-common
+  ports: ["8000:8000"]
+  cap_add:
+    - SYS_PTRACE                # разрешает py-spy читать память процесса
+  healthcheck:
+    test: ["CMD", "python", "-c",
+           "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+    interval: 2s
+    retries: 30
+  depends_on:
+    db:
+      condition: service_healthy
+    loader:
+      condition: service_completed_successfully
+    supplier1:
+      condition: service_healthy
+    supplier2:
+      condition: service_healthy
+    supplier3:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: flights
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flights"]
+      interval: 2s
+      retries: 30
+
+  loader:                       # разовая загрузка рейсов, затем контейнер завершается
+    build:
+      context: .
+      dockerfile: loader/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/flights
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  supplier1:
+    <<: *supplier
+    environment: {SUPPLIER_NAME: supplier1, MEAN_DELAY_MS: "300", ERROR_PCT: "5", SLOW_PCT: "0", FLIGHTS_PER_DAY: "500"}
+  supplier2:
+    <<: *supplier
+    environment: {SUPPLIER_NAME: supplier2, MEAN_DELAY_MS: "500", ERROR_PCT: "5", SLOW_PCT: "0", FLIGHTS_PER_DAY: "500"}
+  supplier3:
+    <<: *supplier
+    environment: {SUPPLIER_NAME: supplier3, MEAN_DELAY_MS: "800", ERROR_PCT: "5", SLOW_PCT: "10", FLIGHTS_PER_DAY: "500"}
+
+  # --- версии сервиса поиска; одновременно запускают только одну (порт 8000) ---
+  search:                       # задача 3.3: def + requests + psycopg (запускается по умолчанию)
+    <<: *search-common
+    profiles: ["v33"]
+    build:
+      context: .
+      dockerfile: search_sync/Dockerfile
+    environment:
+      <<: *search-env
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/flights
+
+  search_v41:                   # задача 4.1: async def + прежние блокирующие вызовы
+    <<: *search-common
+    profiles: ["v41"]
+    build:
+      context: .
+      dockerfile: search_blocking/Dockerfile
+    environment:
+      <<: *search-env
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/flights
+
+  search_v42:                   # задача 4.2: httpx.AsyncClient + asyncpg + gather
+    <<: *search-common
+    profiles: ["v42"]
+    build:
+      context: .
+      dockerfile: search_async/Dockerfile
+    environment:
+      <<: *search-env
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/flights
